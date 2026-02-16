@@ -36,7 +36,8 @@ export async function GET(request: Request) {
   let lastEntrata: Date | null = null;
   let totaleOre = 0;
 
-  const rows = timbrature.map((t) => {
+  type ExcelRow = Record<string, string | number>;
+  const rows: ExcelRow[] = timbrature.map((t) => {
     const data = t.createdAt;
     let oreLavorate: string | number = "";
     let dataEntrata = "";
@@ -79,7 +80,7 @@ export async function GET(request: Request) {
       Longitudine: "",
       Indirizzo: "",
       Città: "",
-    } as Record<string, string | number>);
+    });
   }
 
   const ws = XLSX.utils.json_to_sheet(rows);
