@@ -15,6 +15,18 @@ type DipendenteRow = {
   _count: { timbrature: number };
 };
 
+type PresenzaRow = {
+  id: string;
+  tipo: string;
+  latitudine: number;
+  longitudine: number;
+  indirizzo: string | null;
+  citta: string | null;
+  createdAt: string;
+  dipendenteId: string;
+  dipendente: { id: string; nome: string; cognome: string };
+};
+
 export default function AdminPage() {
   const router = useRouter();
   const [dipendenti, setDipendenti] = useState<DipendenteRow[]>([]);
@@ -31,6 +43,15 @@ export default function AdminPage() {
     role: "DIPENDENTE",
   });
 
+  const [tab, setTab] = useState<"dipendenti" | "presenze">("dipendenti");
+  const [presenze, setPresenze] = useState<PresenzaRow[]>([]);
+  const [presenzeLoading, setPresenzeLoading] = useState(false);
+  const [filtriPresenze, setFiltriPresenze] = useState({
+    dipendenteId: "",
+    da: format(new Date(), "yyyy-MM-01"),
+    a: format(new Date(), "yyyy-MM-dd"),
+  });
+
   const loadDipendenti = useCallback(async () => {
     const res = await fetch("/api/admin/dipendenti");
     if (res.status === 403) {
@@ -43,12 +64,33 @@ export default function AdminPage() {
     setIsAdmin(true);
   }, []);
 
+  const loadPresenze = useCallback(async () => {
+    setPresenzeLoading(true);
+    try {
+      const params = new URLSearchParams();
+      if (filtriPresenze.dipendenteId) params.set("dipendenteId", filtriPresenze.dipendenteId);
+      if (filtriPresenze.da) params.set("da", filtriPresenze.da);
+      if (filtriPresenze.a) params.set("a", filtriPresenze.a);
+      const res = await fetch(`/api/admin/presenze?${params.toString()}`);
+      if (res.ok) {
+        const data = await res.json();
+        setPresenze(data);
+      } else setPresenze([]);
+    } finally {
+      setPresenzeLoading(false);
+    }
+  }, [filtriPresenze.dipendenteId, filtriPresenze.da, filtriPresenze.a]);
+
   useEffect(() => {
     (async () => {
       await loadDipendenti();
       setLoading(false);
     })();
   }, [loadDipendenti]);
+
+  useEffect(() => {
+    if (isAdmin && tab === "presenze") loadPresenze();
+  }, [isAdmin, tab, loadPresenze]);
 
   useEffect(() => {
     if (!loading && !isAdmin && dipendenti.length === 0) {
@@ -129,6 +171,30 @@ export default function AdminPage() {
     await loadDipendenti();
   }
 
+  function handleExportPresenze() {
+    const params = new URLSearchParams();
+    if (filtriPresenze.dipendenteId) params.set("dipendenteId", filtriPresenze.dipendenteId);
+    if (filtriPresenze.da) params.set("da", filtriPresenze.da);
+    if (filtriPresenze.a) params.set("a", filtriPresenze.a);
+    window.open(`/api/admin/presenze/export?${params.toString()}`, "_blank");
+  }
+
+  const presenzeOrdinate = [...presenze].sort(
+    (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+  );
+  const lastEntrataPerDip: Record<string, Date> = {};
+  function getOreLavorate(row: PresenzaRow): string {
+    if (row.tipo === "ENTRATA") {
+      lastEntrataPerDip[row.dipendenteId] = new Date(row.createdAt);
+      return "—";
+    }
+    const lastE = lastEntrataPerDip[row.dipendenteId];
+    if (!lastE) return "—";
+    const ore = (new Date(row.createdAt).getTime() - lastE.getTime()) / (1000 * 60 * 60);
+    delete lastEntrataPerDip[row.dipendenteId];
+    return `${Math.round(ore * 100) / 100} h`;
+  }
+
   if (loading) {
     return (
       <div className={styles.loading}>
@@ -146,18 +212,46 @@ export default function AdminPage() {
     <div className={styles.wrapper}>
       <header className={styles.header}>
         <div>
-          <h1>Admin – Gestione dipendenti</h1>
-          <p className={styles.subtitle}>Aggiungi, modifica o elimina account dipendenti</p>
+          <h1>Admin</h1>
+          <p className={styles.subtitle}>
+            {tab === "dipendenti"
+              ? "Gestione dipendenti e registro presenze"
+              : "Controlla entrate e uscite di tutti i dipendenti"}
+          </p>
         </div>
         <div className={styles.headerActions}>
           <a href="/dashboard" className={styles.backLink}>← Dashboard</a>
-          <button type="button" onClick={openCreate} className={styles.addBtn}>
-            Aggiungi dipendente
-          </button>
+          {tab === "dipendenti" && (
+            <button type="button" onClick={openCreate} className={styles.addBtn}>
+              Aggiungi dipendente
+            </button>
+          )}
+          {tab === "presenze" && (
+            <button type="button" onClick={handleExportPresenze} className={styles.addBtn}>
+              Esporta Excel
+            </button>
+          )}
         </div>
       </header>
 
-      {formOpen && (
+      <div className={styles.tabs}>
+        <button
+          type="button"
+          className={tab === "dipendenti" ? styles.tabActive : styles.tab}
+          onClick={() => setTab("dipendenti")}
+        >
+          Gestione dipendenti
+        </button>
+        <button
+          type="button"
+          className={tab === "presenze" ? styles.tabActive : styles.tab}
+          onClick={() => setTab("presenze")}
+        >
+          Registro presenze
+        </button>
+      </div>
+
+      {tab === "dipendenti" && formOpen && (
         <div className={styles.modalOverlay} onClick={() => setFormOpen(false)}>
           <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
             <h2>{editingId ? "Modifica dipendente" : "Nuovo dipendente"}</h2>
@@ -217,52 +311,146 @@ export default function AdminPage() {
         </div>
       )}
 
-      <div className={styles.tableWrap}>
-        <table className={styles.table}>
-          <thead>
-            <tr>
-              <th>Cognome</th>
-              <th>Nome</th>
-              <th>Ruolo</th>
-              <th>Presenze</th>
-              <th>Registrato il</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            {dipendenti.map((d) => (
-              <tr key={d.id}>
-                <td>{d.cognome}</td>
-                <td>{d.nome}</td>
-                <td>
-                  <span className={d.role === "ADMIN" ? styles.badgeAdmin : styles.badgeDipendente}>
-                    {d.role === "ADMIN" ? "Admin" : "Dipendente"}
-                  </span>
-                </td>
-                <td>{d._count.timbrature}</td>
-                <td>{format(new Date(d.createdAt), "dd/MM/yyyy", { locale: it })}</td>
-                <td>
-                  <div className={styles.rowActions}>
-                    <button type="button" onClick={() => openEdit(d)} className={styles.editBtn}>
-                      Modifica
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleDelete(d.id)}
-                      className={styles.deleteBtn}
-                    >
-                      Elimina
-                    </button>
-                  </div>
-                </td>
+      {tab === "dipendenti" && (
+        <div className={styles.tableWrap}>
+          <table className={styles.table}>
+            <thead>
+              <tr>
+                <th>Cognome</th>
+                <th>Nome</th>
+                <th>Ruolo</th>
+                <th>Presenze</th>
+                <th>Registrato il</th>
+                <th></th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-        {dipendenti.length === 0 && (
-          <p className={styles.empty}>Nessun dipendente. Clicca &quot;Aggiungi dipendente&quot;.</p>
-        )}
-      </div>
+            </thead>
+            <tbody>
+              {dipendenti.map((d) => (
+                <tr key={d.id}>
+                  <td>{d.cognome}</td>
+                  <td>{d.nome}</td>
+                  <td>
+                    <span className={d.role === "ADMIN" ? styles.badgeAdmin : styles.badgeDipendente}>
+                      {d.role === "ADMIN" ? "Admin" : "Dipendente"}
+                    </span>
+                  </td>
+                  <td>{d._count.timbrature}</td>
+                  <td>{format(new Date(d.createdAt), "dd/MM/yyyy", { locale: it })}</td>
+                  <td>
+                    <div className={styles.rowActions}>
+                      <button type="button" onClick={() => openEdit(d)} className={styles.editBtn}>
+                        Modifica
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDelete(d.id)}
+                        className={styles.deleteBtn}
+                      >
+                        Elimina
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {dipendenti.length === 0 && (
+            <p className={styles.empty}>Nessun dipendente. Clicca &quot;Aggiungi dipendente&quot;.</p>
+          )}
+        </div>
+      )}
+
+      {tab === "presenze" && (
+        <>
+          <div className={styles.filters}>
+            <label className={styles.filterLabel}>
+              Dipendente
+              <select
+                value={filtriPresenze.dipendenteId}
+                onChange={(e) =>
+                  setFiltriPresenze((f) => ({ ...f, dipendenteId: e.target.value }))
+                }
+              >
+                <option value="">Tutti</option>
+                {dipendenti.map((d) => (
+                  <option key={d.id} value={d.id}>
+                    {d.cognome} {d.nome}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className={styles.filterLabel}>
+              Da
+              <input
+                type="date"
+                value={filtriPresenze.da}
+                onChange={(e) => setFiltriPresenze((f) => ({ ...f, da: e.target.value }))}
+              />
+            </label>
+            <label className={styles.filterLabel}>
+              A
+              <input
+                type="date"
+                value={filtriPresenze.a}
+                onChange={(e) => setFiltriPresenze((f) => ({ ...f, a: e.target.value }))}
+              />
+            </label>
+            <button type="button" onClick={loadPresenze} className={styles.filterBtn}>
+              Applica
+            </button>
+          </div>
+          {presenzeLoading ? (
+            <div className={styles.loading}>
+              <div className={styles.spinner} />
+              <p>Caricamento presenze...</p>
+            </div>
+          ) : (
+            <div className={styles.tableWrap}>
+              <table className={styles.table}>
+                <thead>
+                  <tr>
+                    <th>Dipendente</th>
+                    <th>Data</th>
+                    <th>Ora</th>
+                    <th>Tipo</th>
+                    <th>Ore</th>
+                    <th>Indirizzo</th>
+                    <th>Città</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {presenzeOrdinate.map((row) => (
+                    <tr key={row.id}>
+                      <td>
+                        {row.dipendente.cognome} {row.dipendente.nome}
+                      </td>
+                      <td>{format(new Date(row.createdAt), "dd/MM/yyyy", { locale: it })}</td>
+                      <td>{format(new Date(row.createdAt), "HH:mm:ss", { locale: it })}</td>
+                      <td>
+                        <span
+                          className={
+                            row.tipo === "ENTRATA" ? styles.badgeEntrata : styles.badgeUscita
+                          }
+                        >
+                          {row.tipo}
+                        </span>
+                      </td>
+                      <td>{getOreLavorate(row)}</td>
+                      <td className={styles.cellSmall}>{row.indirizzo || "—"}</td>
+                      <td>{row.citta || "—"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {presenze.length === 0 && (
+                <p className={styles.empty}>
+                  Nessuna presenza nel periodo selezionato. Modifica i filtri e clicca Applica.
+                </p>
+              )}
+            </div>
+          )}
+        </>
+      )}
     </div>
   );
 }
