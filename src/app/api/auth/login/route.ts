@@ -14,9 +14,10 @@ export async function POST(request: Request) {
     const nome = body?.nome ?? "";
     const cognome = body?.cognome ?? "";
     const password = body?.password ?? "";
-    const n = norm(String(nome));
-    const c = norm(String(cognome));
-    if (!n || !c || !password) {
+    const n = norm(String(nome)).toLowerCase();
+    const c = norm(String(cognome)).toLowerCase();
+    const pwd = String(password).trim();
+    if (!n || !c || !pwd) {
       return NextResponse.json(
         isDev
           ? { error: "Nome, cognome e password richiesti", debug: { ricevuto: body } }
@@ -34,22 +35,21 @@ export async function POST(request: Request) {
 
     if (!dipendente) {
       return NextResponse.json(
-        isDev
-          ? {
-              error: "Credenziali non valide",
-              debug: { motivo: "Nessun utente con questo nome/cognome", totaleUtenti: tutti.length },
-            }
-          : { error: "Credenziali non valide" },
+        {
+          error: "Credenziali non valide",
+          debug: { motivo: "Nessun utente con questo nome/cognome", totaleUtenti: tutti.length },
+        },
         { status: 401 }
       );
     }
 
-    const ok = await bcrypt.compare(String(password), dipendente.password);
+    const ok = await bcrypt.compare(pwd, dipendente.password);
     if (!ok) {
       return NextResponse.json(
-        isDev
-          ? { error: "Credenziali non valide", debug: { motivo: "Password errata" } }
-          : { error: "Credenziali non valide" },
+        {
+          error: "Credenziali non valide",
+          debug: { motivo: "Password errata" },
+        },
         { status: 401 }
       );
     }
