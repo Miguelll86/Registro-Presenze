@@ -35,3 +35,4 @@ Poi apri [http://localhost:3000](http://localhost:3000).
 - Su mobile, apri l’app dal browser per usare la posizione reale.
 - Il file del database SQLite è `prisma/dev.db` (puoi sostituirlo con PostgreSQL modificando `schema.prisma` e la variabile `datasource`).
 # Registro-Presenze
+# Registro-Presenze
