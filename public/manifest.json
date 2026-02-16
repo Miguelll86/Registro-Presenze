@@ -1,0 +1,20 @@
+{
+  "name": "Registro presenze",
+  "short_name": "Registro presenze",
+  "description": "App di registro presenze con geolocalizzazione",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0f1419",
+  "theme_color": "#0f1419",
+  "orientation": "portrait-primary",
+  "scope": "/",
+  "lang": "it",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

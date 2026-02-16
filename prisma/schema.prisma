@@ -1,0 +1,32 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Dipendente {
+  id        String   @id @default(cuid())
+  email     String?  // opzionale; login con nome + cognome + password
+  password  String
+  nome      String
+  cognome   String
+  role      String   @default("DIPENDENTE") // DIPENDENTE | ADMIN
+  createdAt DateTime @default(now())
+  timbrature Timbratura[]
+  @@unique([nome, cognome])
+}
+
+model Timbratura {
+  id          String   @id @default(cuid())
+  tipo        String   // "ENTRATA" | "USCITA"
+  latitudine  Float
+  longitudine Float
+  indirizzo   String?  // da reverse geocoding
+  citta      String?  // città da reverse geocoding
+  createdAt   DateTime @default(now())
+  dipendenteId String
+  dipendente   Dipendente @relation(fields: [dipendenteId], references: [id], onDelete: Cascade)
+}
